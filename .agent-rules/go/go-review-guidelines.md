@@ -23,9 +23,13 @@
 ## 🏗 設計
 - 公開API最小化、インターフェースは最小メソッド集合。
 - テスト容易性（依存注入、table-driven、Fuzz/PBT）。
+- **Go 1.23**: Iterator pattern活用（`iter.Seq`/`Seq2`）、lazy evaluation推奨
+- **Go 1.24**: Generic type aliasの適切な使用、`unique`パッケージでcanonical化
 
 ## 🧪 テスト
 - 単体→統合→E2Eの順。ベンチは `B.Loop` を推奨、`benchstat` で差分提示。
+- **Go 1.24**: `testing.B.Loop()` メソッドでベンチマークイテレーション改善
+- **Go 1.24**: `testing/synctest` 実験版（`GOEXPERIMENT=synctest`）による並行コードテスト
 - **Go 1.25**: `testing/synctest` 安定版活用、並行処理テストの信頼性向上
 - **Go 1.25**: `T.Attr()`/`B.Attr()`でテスト属性設定、並列テスト中の`AllocsPerRun()`禁止
 - **Go 1.25**: `T.Output()`メソッドでテスト出力制御、適切なログ管理
@@ -33,14 +37,22 @@
 ## 🗃 DB
 - `QueryContext/ExecContext` 徹底、Txは `defer rollback` パターンを基本に。
 
-## 🔧 Runtime・最適化 (Go 1.25)
-**🟡 Medium**
-- `runtime.AddCleanup()` 並行実行対応、軽量cleanup関数推奨
-- `runtime/trace.FlightRecorder` でレアイベント追跡、最小オーバーヘッド
-- GOMAXPROCS自動調整（cgroup制限考慮）の動作理解
-- DWARF 5デバッグ情報生成、バイナリサイズ・リンク時間最適化
+## 🔧 Runtime・最適化
+**🟡 Medium (Go 1.23-1.25)**
+- **Go 1.23**: Iterator使用時のメモリ効率確認、`iter.Pull`でearly-stop実装
+- **Go 1.23**: Timer/Tickerの即座GC化、channel容量0化への対応
+- **Go 1.24**: Swiss Tables map実装恩恵（大サイズmap 30%高速化）
+- **Go 1.24**: `os.Root`でファイルシステム操作分離、セキュリティ向上
+- **Go 1.24**: Cgo注釈（`#cgo noescape`/`nocallback`）でパフォーマンス向上
+- **Go 1.25**: `runtime.AddCleanup()` 並行実行対応、軽量cleanup関数推奨
+- **Go 1.25**: `runtime/trace.FlightRecorder` でレアイベント追跡、最小オーバーヘッド
+- **Go 1.25**: GOMAXPROCS自動調整（cgroup制限考慮）の動作理解
+- **Go 1.25**: DWARF 5デバッグ情報生成、バイナリサイズ・リンク時間最適化
 
 **🔵 Info**
-- スライス最適化（スタック割当増加）恩恵確認
-- unsafe.Pointerとの組み合わせ時は特に注意
-- 実験的GC・encoding/json/v2は明示的opt-in時のみ使用
+- **Go 1.23**: `slices.All`/`maps.All` など標準Iterator関数活用
+- **Go 1.24**: FIPS 140-3対応（`GOFIPS140`環境変数、`fips140` GODEBUG）
+- **Go 1.24**: Tool dependencies（`go.mod`の`//go:build tools`）管理
+- **Go 1.25**: スライス最適化（スタック割当増加）恩恵確認
+- **Go 1.25**: unsafe.Pointerとの組み合わせ時は特に注意
+- **Go 1.25**: 実験的GC・encoding/json/v2は明示的opt-in時のみ使用
