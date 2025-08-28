@@ -2,58 +2,48 @@
 
 > 出力テンプレと重要度定義は共通テンプレを利用（Critical/High/Medium/Low/Info）。
 
-## 🔒 セキュリティ
+## 🔒 Webアプリセキュリティ
 **🔴 Critical**
-- 文字連結SQL／未バインドパラメータ
-- 外部URLを無制限にフェッチ（SSRF）
-- 認可欠如・Secrets露出・タイムアウト未設定
+- SQLインジェクション（文字連結SQL・未バインドパラメータ）
+- SSRF攻撃（外部URL無制限フェッチ・Host/IPチェック欠如）
+- 認証・認可欠如、JWT/Session管理不備
+- Secrets/API Key露出（ログ・レスポンス・エラー）
+- HTTPタイムアウト未設定（DoS脆弱性）
 
 **🔴 High**
-- `context` 未伝搬／`-race` で検出される競合
-- Tx/ロックの粒度不適切、未検査エラー破棄
-- 脆弱依存（`govulncheck` 到達）
-- **Go 1.25**: nilポインタアクセス前の明示的チェック漏れ（従来動作コードでpanic発生リスク）
+- CSRF対策不備（SameSite Cookie・CSRF Token）
+- XSS脆弱性（入力値サニタイズ不備・Content-Type設定）
+- HTTP Header Security不備（CORS・CSP・HSTS）
+- `context` 未伝搬でリクエスト処理追跡不可
+- 競合状態（`-race` 検出）・未検査エラー破棄
+- **Go 1.25**: nilポインタチェック漏れ（panic発生リスク）
 
-## ⚡ パフォーマンス
-- **計測に基づく**改善以外は採用しない（pprof/ベンチの根拠必須）。
-- ホットパスのアロケ削減、I/Oのストリーム化。
-- **Go 1.25**: PGO（Profile-Guided Optimization）の積極活用、本番プロファイル反映
-- **Go 1.25**: 新JSON実装（`GOEXPERIMENT=jsonv2`）パフォーマンス検証と互換性テスト
+## ⚡ Webアプリパフォーマンス
+**🟡 Medium**
+- HTTPレスポンス時間測定（pprof）、データベースクエリ最適化
+- JSON処理最適化、大量データのストリーミング処理
+- Connection Pool設定、Keep-Alive活用
+- メモリリーク回避（goroutine・HTTP client・DB connection）
+- **Go 1.25**: 本番プロファイルでのPGO最適化
 
 ## 🏗 設計
-- 公開API最小化、インターフェースは最小メソッド集合。
-- テスト容易性（依存注入、table-driven、Fuzz/PBT）。
-- **Go 1.23**: Iterator pattern活用（`iter.Seq`/`Seq2`）、lazy evaluation推奨
-- **Go 1.24**: Generic type aliasの適切な使用、`unique`パッケージでcanonical化
+- HTTPハンドラー/ミドルウェアの責任分離、依存注入でテスト容易性確保
+- **Go 1.23**: 大量データ処理時のIterator pattern活用（`slices.All`等）
 
 ## 🧪 テスト
-- 単体→統合→E2Eの順。ベンチは `B.Loop` を推奨、`benchstat` で差分提示。
-- **Go 1.24**: `testing.B.Loop()` メソッドでベンチマークイテレーション改善
-- **Go 1.24**: `testing/synctest` 実験版（`GOEXPERIMENT=synctest`）による並行コードテスト
-- **Go 1.25**: `testing/synctest` 安定版活用、並行処理テストの信頼性向上
-- **Go 1.25**: `T.Attr()`/`B.Attr()`でテスト属性設定、並列テスト中の`AllocsPerRun()`禁止
-- **Go 1.25**: `T.Output()`メソッドでテスト出力制御、適切なログ管理
+- HTTPハンドラーテスト（`httptest.Server`）、DBはtestcontainers推奨
+- table-drivenテストでエッジケース網羅
 
 ## 🗃 DB
 - `QueryContext/ExecContext` 徹底、Txは `defer rollback` パターンを基本に。
 
-## 🔧 Runtime・最適化
-**🟡 Medium (Go 1.22-1.25)**
-- **Go 1.22**: ループ変数スコープ変更によるパフォーマンス回帰注意（大きな値の複製）
-- **Go 1.23**: Iterator使用時のメモリ効率確認、`iter.Pull`でearly-stop実装
-- **Go 1.23**: Timer/Tickerの即座GC化、channel容量0化への対応
-- **Go 1.24**: Swiss Tables map実装恩恵（大サイズmap 30%高速化）
-- **Go 1.24**: `os.Root`でファイルシステム操作分離、セキュリティ向上
-- **Go 1.24**: Cgo注釈（`#cgo noescape`/`nocallback`）でパフォーマンス向上
-- **Go 1.25**: `runtime.AddCleanup()` 並行実行対応、軽量cleanup関数推奨
-- **Go 1.25**: `runtime/trace.FlightRecorder` でレアイベント追跡、最小オーバーヘッド
-- **Go 1.25**: GOMAXPROCS自動調整（cgroup制限考慮）の動作理解
-- **Go 1.25**: DWARF 5デバッグ情報生成、バイナリサイズ・リンク時間最適化
+## 🔧 Webアプリ最適化
+**🟡 Medium**
+- **Go 1.22**: 大きなstruct値のループでパフォーマンス回帰注意
+- **Go 1.24**: 大量データ処理時のmap最適化恩恵（30%高速化）
+- **Go 1.25**: PGO活用（本番プロファイルでビルド最適化）
+- **Go 1.25**: 新JSON実装での互換性確認（`GOEXPERIMENT=jsonv2`）
 
 **🔵 Info**
-- **Go 1.23**: `slices.All`/`maps.All` など標準Iterator関数活用
-- **Go 1.24**: FIPS 140-3対応（`GOFIPS140`環境変数、`fips140` GODEBUG）
-- **Go 1.24**: Tool dependencies（`go.mod`の`//go:build tools`）管理
-- **Go 1.25**: スライス最適化（スタック割当増加）恩恵確認
-- **Go 1.25**: unsafe.Pointerとの組み合わせ時は特に注意
-- **Go 1.25**: 実験的GC・encoding/json/v2は明示的opt-in時のみ使用
+- コンテナ環境でのGOMAXPROCS自動調整恩恵
+- リクエスト処理でのgoroutineリーク回避
