@@ -1,0 +1,127 @@
+name: Claude Go/Next Review (manual trigger via @claude)
+
+on:
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude-go-next-review:
+    if: |
+      ((github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@claude')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.head_ref }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install FE deps (best-effort)
+        continue-on-error: true
+        run: pnpm i --frozen-lockfile || true
+
+      - name: Install Go tools
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run Go analysis
+        id: go_analysis
+        continue-on-error: true
+        run: |
+          echo "## golangci-lint" > go_analysis.md
+          golangci-lint run ./... >> go_analysis.md 2>&1 || true
+          echo -e "\n## govulncheck" >> go_analysis.md
+          govulncheck ./... >> go_analysis.md 2>&1 || true
+          echo "STATIC_ANALYSIS_GO<<EOF" >> $GITHUB_ENV
+          cat go_analysis.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Run FE analysis
+        id: fe_analysis
+        continue-on-error: true
+        run: |
+          echo "## TypeCheck" > fe_analysis.md
+          pnpm run -s typecheck >> fe_analysis.md 2>&1 || true
+          echo -e "\n## ESLint" >> fe_analysis.md
+          pnpm run -s lint >> fe_analysis.md 2>&1 || true
+          echo -e "\n## Tests" >> fe_analysis.md
+          pnpm run -s test:ci >> fe_analysis.md 2>&1 || true
+          echo "STATIC_ANALYSIS_FE<<EOF" >> $GITHUB_ENV
+          cat fe_analysis.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Fetch Next.js principles (AkifumiSato)
+        run: |
+          git clone --depth=1 https://github.com/AkifumiSato/zenn-article.git /tmp/zenn || true
+          mkdir -p .agent-rules/next/nextjs-basic-principle
+          cp -r /tmp/zenn/books/nextjs-basic-principle/* .agent-rules/next/nextjs-basic-principle/ || true
+
+      - name: Concatenate Next guide
+        run: |
+          mkdir -p /tmp/next-guide
+          cat .agent-rules/next/next-thinking.md > /tmp/next-guide/all.md || true
+          find .agent-rules/next/nextjs-basic-principle -name '*.md' -maxdepth 1 -print0 | xargs -0 -I{} sh -c 'echo -e "\n\n" >> /tmp/next-guide/all.md; cat "{}" >> /tmp/next-guide/all.md' || true
+          echo "NEXT_GUIDE<<EOF" >> $GITHUB_ENV
+          cat /tmp/next-guide/all.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Get PR details
+        id: pr_details
+        run: |
+          PR_NUMBER=${{ github.event.pull_request.number || github.event.issue.number }}
+          CHANGED_FILES=$(gh pr view $PR_NUMBER --json files --jq '.files[].path' | head -50)
+          echo "PR_NUMBER=${PR_NUMBER}" >> $GITHUB_ENV
+          echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
+          echo "$CHANGED_FILES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Prepare review prompt
+        run: |
+          mkdir -p .github/prompts
+          cat .github/prompts/go-next-code-review-prompt.md > review_prompt.md
+          echo -e "\n\n## Context\nChanged Files:\n${{ env.CHANGED_FILES }}" >> review_prompt.md
+          echo -e "\n\n## Static Analysis (Go)\n${{ env.STATIC_ANALYSIS_GO }}" >> review_prompt.md
+          echo -e "\n\n## Static Analysis (FE)\n${{ env.STATIC_ANALYSIS_FE }}" >> review_prompt.md
+          echo -e "\n\n## Next.js Guide (concat)\n${{ env.NEXT_GUIDE }}" >> review_prompt.md
+
+      - name: Run Claude PR Action
+        uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          timeout_minutes: "30"
+          direct_prompt_path: "review_prompt.md"
+
+      - name: Post review summary
+        if: always()
+        run: |
+          echo "✅ Claude Go/Next Review 完了"

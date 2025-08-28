@@ -1,0 +1,33 @@
+name: Front CI
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - feature/**
+      - main
+    paths:
+      - next-app/**
+
+jobs:
+  check-code:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./next-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ./.node-version
+
+      - name: Resolve dependencies
+        run: npm i
+
+      - name: Run check-code
+        run: npm run check-code

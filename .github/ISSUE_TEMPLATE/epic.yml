@@ -1,0 +1,63 @@
+name: "🚀 Epic"
+description: "新機能や大規模な改善に関するエピックを作成します"
+title: "🚀 Epic: [エピックのタイトル]"
+labels: ["Epic"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 概要
+        このエピックが目指す大きなゴールや、解決したい課題を記述してください。
+
+  - type: textarea
+    id: why
+    attributes:
+      label: "🤔 なぜこれが必要か (WHY)"
+      description: "このエピックがビジネスやユーザーにとってなぜ重要なのか、背景や目的を記述してください。"
+      placeholder: "例：ユーザーの離脱率を改善するため、新しいオンボーディング体験を提供する。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: "✨ 何を作るのか (WHAT)"
+      description: "このエピックで実現することの全体像を記述してください。技術的な詳細ではなく、機能の概要がわかるように記述します。"
+      placeholder: "例：チュートリアル機能、進捗表示機能、ウェルカムメッセージ機能などを含む、新しいオンボーミングフローを構築する。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: "✅ スコープ"
+      description: "このエピックに含まれること、含まれないことを明確にしてください。"
+      placeholder: |
+        **含まれること:**
+        -
+        **含まれないこと:**
+        -
+    validations:
+      required: false
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: "🎯 完了条件"
+      description: "このエピックが完了したと判断するための条件を記述してください。"
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: false
+
+  - type: textarea
+    id: related-documents
+    attributes:
+      label: "📚 関連ドキュメント"
+      description: "デザインカンプ、仕様書、議事録など、関連するドキュメントへのリンクを記載してください。"
+      placeholder: |
+        - [デザインカンプ](http://)
+        - [仕様書](http://)
+    validations:
+      required: false

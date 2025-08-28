@@ -1,0 +1,73 @@
+name: 'Run Gemini CLI Non-Interactively'
+
+# トリガーを定義
+on:
+  workflow_dispatch:
+    inputs:
+      gte:
+        description: 'Greater than or equal to value.'
+        required: true
+        type: 'string'
+      lte:
+        description: 'Less than or equal to value.'
+        required: true
+        type: 'string'
+  repository_dispatch:
+    types: [trigger-summary]
+
+jobs:
+  run-gemini:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 'Checkout repository'
+        uses: actions/checkout@v4
+
+      - name: 'Generate Prompt'
+        id: generate_prompt
+        if: github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
+        run: |
+          GTE=""
+          LTE=""
+
+          # イベントの種類に応じて入力ソースを切り替える
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            GTE="${{ github.event.inputs.gte }}"
+            LTE="${{ github.event.inputs.lte }}"
+          elif [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            # client_payloadからjqを使って安全に値を取得
+            GTE=$(echo '${{ toJSON(github.event.client_payload) }}' | jq -r .gte)
+            LTE=$(echo '${{ toJSON(github.event.client_payload) }}' | jq -r .lte)
+          fi
+
+          # 必須パラメータのチェック
+          if [ -z "$GTE" ] || [ -z "$LTE" ]; then
+            echo "Error: 'gte' or 'lte' not found in event payload."
+            exit 1
+          fi
+
+          PROMPT="${GTE}日から${LTE}日までの行われたことのサマリを出して、\n完了タスク・進行中(まだdevelopにマージされていない)タスクで分けてください。全体の文字数は2000文字以内に収まるよう箇条書きで出力してください。出力時の言語は日本語でお願いします。"
+
+          # マルチラインの出力を設定するための特殊な構文
+          echo "prompt<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$PROMPT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: 'Run Gemini CLI with dynamic prompt'
+        id: gemini_summary
+        if: steps.generate_prompt.outputs.prompt != ''
+        uses: 'google-github-actions/run-gemini-cli@v0'
+        with:
+          prompt: ${{ steps.generate_prompt.outputs.prompt }}
+          gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
+
+      - name: Send summary to Slack
+        if: success() && steps.gemini_summary.outputs.summary
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SUMMARY: ${{ steps.gemini_summary.outputs.summary }}
+        run: |
+          JSON_PAYLOAD=$(jq -n --arg msg "$SUMMARY" '{message: $msg}')
+          echo "Sending payload to Slack..."
+          curl -X POST -H 'Content-type: application/json' --data "$JSON_PAYLOAD" "$SLACK_WEBHOOK_URL"
+
