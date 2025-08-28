@@ -38,7 +38,8 @@
 - `QueryContext/ExecContext` 徹底、Txは `defer rollback` パターンを基本に。
 
 ## 🔧 Runtime・最適化
-**🟡 Medium (Go 1.23-1.25)**
+**🟡 Medium (Go 1.22-1.25)**
+- **Go 1.22**: ループ変数スコープ変更によるパフォーマンス回帰注意（大きな値の複製）
 - **Go 1.23**: Iterator使用時のメモリ効率確認、`iter.Pull`でearly-stop実装
 - **Go 1.23**: Timer/Tickerの即座GC化、channel容量0化への対応
 - **Go 1.24**: Swiss Tables map実装恩恵（大サイズmap 30%高速化）
